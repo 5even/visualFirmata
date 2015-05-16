@@ -201,6 +201,10 @@ namespace visualFirmata
             { 
                 //TODO PROCESS INPUT
             }
+            catch
+            {
+
+            }
         }
 
         private void SendByteArray(byte[] Array)
