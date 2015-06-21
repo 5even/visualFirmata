@@ -5,7 +5,7 @@ VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "visualFirmata", "visualFirmata\visualFirmata.csproj", "{C2A894D0-E23D-4D1A-97B4-410FD9152AE3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestForm", "TestForm\TestForm.csproj", "{67205F6F-7159-4704-8D49-DA388B496434}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serial Communication Form", "TestForm\Serial Communication Form.csproj", "{67205F6F-7159-4704-8D49-DA388B496434}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -50,6 +50,13 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <Compile Include="Protocol Values\FirmataDigitalPort.cs" />
+    <Compile Include="Protocol Values\FirmataOnOff.cs" />
+    <Compile Include="Program Constants\SerialReadState.cs" />
+    <Compile Include="Protocol Values\StandardMessageType.cs" />
+    <Compile Include="Protocol Values\DigitalPinMode.cs" />
+    <Compile Include="Protocol Values\SysExCommand.cs" />
+    <Compile Include="Protocol Values\FirmataHighLow.cs" />
     <Compile Include="VisualFirmata.cs">
       <SubType>Component</SubType>
     </Compile>

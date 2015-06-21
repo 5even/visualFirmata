@@ -5,9 +5,17 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.IO.Ports;
+using System.Collections.Concurrent;
 
 namespace visualFirmata
 {
+
+    public delegate void AnalogPinReadReceivedEventHandler(int AnalogPinNumber, int Value);
+    public delegate void DigitalPinReadReceivedEventHandler(int DigitalPinNumber, FirmataHighLow Value);
+    public delegate void VersionInfoReceivedEventHandler(int majorVersion, int minorVersion);
+    public delegate void PinStateInfoReceivedEventHandler(int DigitalPinNumber, DigitalPinMode DigitalPinMode, FirmataOnOff DigitalPinState, FirmataHighLow DigitalPinValue);
+    public delegate void SerialDataReceivedEventHandler(byte Data);
+    public delegate void SerialDataSentEventHandler(byte[] Data);
 
     public class FirmataPort : System.ComponentModel.Component
     {
@@ -27,23 +35,27 @@ namespace visualFirmata
             {
                 container.Add(this);
             }
+            prvtSerialPort.DataReceived += prvtSerialPort_DataReceived;
         }
         public FirmataPort()
             : base()
         {
             InitializeComponent();
+            this.BaudRate = 57600;
+            prvtSerialPort.DataReceived += prvtSerialPort_DataReceived;
         }
         public FirmataPort(string PortName, int BaudRate)
         {
             prvtSerialPort.PortName = PortName;
             prvtSerialPort.BaudRate = BaudRate;
+            prvtSerialPort.DataReceived += prvtSerialPort_DataReceived;
         }
 
         private System.ComponentModel.IContainer components = new System.ComponentModel.Container();
 
         private void InitializeComponent()
         {
-
+            suppressErrors = true;
         }
 
         protected override void Dispose(Boolean disposing)
@@ -64,7 +76,7 @@ namespace visualFirmata
             }
         }
 
-        private static SerialPort prvtSerialPort = new SerialPort();
+        private SerialPort prvtSerialPort = new SerialPort();
 
         public string PortName
         {
@@ -89,100 +101,36 @@ namespace visualFirmata
             get { return prvtSerialPort.StopBits; }
             set { prvtSerialPort.StopBits = value; }
         }
-
-        public enum CommandBytes
-        {
-            AnalogIOMessage = 0xE0,
-            DigitalIOMessage = 0x90,
-            ReportAnalogPin = 0xC0,
-            ReportDigitalPort = 0xD0,
-            SysExStart = 0xF0,
-            SetPinMode = 0xF4,
-            SysExEnd = 0xF7,
-            ProtocolVersion = 0xF9,
-            SystemReset = 0xFF
-        }
-
-        public enum SysExBytes
-        {
-            RESERVED_COMMAND = 0x00,        // 2nd SysEx data byte is a chip-specific command (AVR, PIC, TI, etc).
-            ANALOG_MAPPING_QUERY = 0x69,    // ask for mapping of analog to pin numbers
-            ANALOG_MAPPING_RESPONSE = 0x6A, // reply with mapping info
-            CAPABILITY_QUERY = 0x6B,        // ask for supported modes and resolution of all pins
-            CAPABILITY_RESPONSE = 0x6C,     // reply with supported modes and resolution
-            PIN_STATE_QUERY = 0x6D,         // ask for a pin's current mode and value
-            PIN_STATE_RESPONSE = 0x6E,      // reply with a pin's current mode and value
-            EXTENDED_ANALOG = 0x6F,         // analog write (PWM, Servo, etc) to any pin
-            SERVO_CONFIG = 0x70,            // set max angle, minPulse, maxPulse, freq
-            STRING_DATA = 0x71,             // a string message with 14-bits per char
-            SHIFT_DATA = 0x75,              // shiftOut config/data message (34 bits)
-            I2C_REQUEST = 0x76,             // I2C request messages from a host to an I/O board
-            I2C_REPLY = 0x77,               // I2C reply messages from an I/O board to a host
-            I2C_CONFIG = 0x78,              // Configure special I2C settings such as power pins and delay times
-            REPORT_FIRMWARE = 0x79,         // report name and version of the firmware
-            SAMPLING_INTERVAL = 0x7A,       // sampling interval
-            SYSEX_NON_REALTIME = 0x7E,      // MIDI Reserved for non-realtime messages
-            SYSEX_REALTIME = 0x7F           // MIDI Reserved for realtime messages
-        }
-
-        public enum DigitalPinMode
-        {
-            INPUT = 0,
-            OUTPUT = 1,
-            ANALOG = 2,
-            PWM = 3,
-            SERVO = 4
-        }
-
-        public enum OnOff
-        {
-            DISABLE = 0,
-            ENABLE = 1
-        }
-
-        public enum HighLow
-        {
-            LOW = 0,
-            HIGH = 1
-        }
-
-        public enum DigitalPorts
-        {
-            Pin0ToPin7 = 0,
-            Pin8ToPin15 = 1,
-            Pin16ToPin23 = 2,
-            Pin24ToPin31 = 3,
-            Pin32ToPin39 = 4,
-            Pin40ToPin47 = 5,
-            Pin48ToPin55 = 6,
-            Pin56ToPin63 = 7,
-            Pin64ToPin71 = 8,
-            Pin72ToPin79 = 9,
-            Pin80ToPin87 = 10,
-            Pin88ToPin95 = 11,
-            Pin96ToPin103 = 12,
-            Pin104ToPin111 = 13,
-            Pin112ToPin119 = 14,
-            Pin120ToPin127 = 15
-        }
-
+        
         public static bool suppressErrors = false;
-        public void QueryVersion() {SendByteArray(new byte[] {(byte)FirmataPort.SysExBytes.REPORT_FIRMWARE });}
-        public void StartSysEx() { SendByteArray(new byte[] { (byte)FirmataPort.CommandBytes.SysExStart }); }
-        public void EndSysEx() { SendByteArray(new byte[] { (byte)FirmataPort.CommandBytes.SysExEnd }); }
-        public void SetPinMode(int DigitalPin, DigitalPinMode DigitalPinMode) { SendByteArray(new byte[] {(byte) FirmataPort.CommandBytes.SetPinMode, (byte) DigitalPin, (byte) DigitalPinMode});}
-        public void AnalogPinReport(int AnalogPin, OnOff ReportEnable) { SendByteArray(new byte[] { (byte)((byte)FirmataPort.CommandBytes.ReportAnalogPin | AnalogPin), (byte)ReportEnable }); }
-        public void DigitalPinReport(FirmataPort.DigitalPorts Pins, OnOff ReportEnable) {SendByteArray(new byte[] { (byte)(((byte)FirmataPort.CommandBytes.ReportDigitalPort) | (byte)(Pins)), (byte)ReportEnable });}
-        public void DigitalWrite(int pin, HighLow value)
+        public void QueryVersion() {SendByteArray(new byte[] {(byte)SysExCommand.REPORT_FIRMWARE });}
+        public void StartSysEx() { SendByteArray(new byte[] { (byte)FirmataMessageType.START_SYSEX }); }
+        public void EndSysEx() { SendByteArray(new byte[] { (byte)FirmataMessageType.END_SYSEX }); }
+        public void SetPinMode(int DigitalPin, DigitalPinMode DigitalPinMode) { SendByteArray(new byte[] {(byte) FirmataMessageType.SET_PIN_MODE, (byte) DigitalPin, (byte) DigitalPinMode});}
+        public void AnalogPinReport(int AnalogPin, FirmataOnOff ReportEnable) { SendByteArray(new byte[] { (byte)((byte)FirmataMessageType.REPORT_ANALOG | AnalogPin), (byte)ReportEnable }); }
+        public void DigitalPinReport(FirmataDigitalPort Pins, FirmataOnOff ReportEnable) {SendByteArray(new byte[] { (byte)(((byte)FirmataMessageType.REPORT_DIGITAL) | (byte)(Pins)), (byte)ReportEnable });}
+        public void DigitalPinReport(int Pin, FirmataOnOff ReportEnable) 
+        {
+            FirmataDigitalPort PinsPort = (FirmataDigitalPort)(Math.Floor((double)(Pin / 8)));
+            SendByteArray(new byte[] { (byte)(((byte)FirmataMessageType.REPORT_DIGITAL) | (byte)(PinsPort)), (byte)ReportEnable }); 
+        }
+        
+        public void DigitalWrite(int pin, FirmataHighLow value)
         {
             int portNumber = (pin >> 3) & 15;
             int adjustment = (1 << (pin & 7));
             byte[] digitalWriteBytes = { 0, 0, 0 };
             
-            if(value == 0){digitalOutputData[portNumber] = digitalOutputData[portNumber] & ~(adjustment);}
-            else{digitalOutputData[portNumber] = digitalOutputData[portNumber] | adjustment;}
+            if(value == 0)
+            {
+                digitalOutputData[portNumber] = digitalOutputData[portNumber] & (~adjustment);
+            }
+            else
+            {
+                digitalOutputData[portNumber] = digitalOutputData[portNumber] | adjustment;
+            }
 
-            digitalWriteBytes[0] = (byte)((byte)CommandBytes.DigitalIOMessage | (byte)portNumber);
+            digitalWriteBytes[0] = (byte)((byte)FirmataMessageType.DIGITAL_MESSAGE | (byte)portNumber);
             digitalWriteBytes[1] = (byte)((byte)digitalOutputData[portNumber] & (byte)127);
             digitalWriteBytes[2] = (byte)((byte)digitalOutputData[portNumber] >> 7);
 
@@ -191,15 +139,151 @@ namespace visualFirmata
         
         private void prvtSerialPort_DataReceived(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
         {
-           
+            ProcessInput();
         }
 
-        private static void ProcessInput()
+        internal  SerialReadState CurrentSerialReadState = SerialReadState.Idle;
+        internal  byte CurrentCommand = 0;
+        internal  byte multiByteChannel = 0;
+        internal  int bytesExpected = 0;
+
+        internal Queue<byte> ReceivedBytes = new Queue<byte>();
+
+        internal  List<byte> InputBytes = new List<byte>();
+        internal  List<byte> SysExBytes = new List<byte>();
+
+        public event DigitalPinReadReceivedEventHandler DigitalPinReadReceived;
+        public event AnalogPinReadReceivedEventHandler AnalogPinReadReceived;
+        public event VersionInfoReceivedEventHandler VersionInfoReceived;
+        public event PinStateInfoReceivedEventHandler PinStateInfoReceived;
+        public event SerialDataReceivedEventHandler SerialDataReceived;
+        public event SerialDataSentEventHandler SerialDataSent;
+
+        public void Connect()
         {
-            if (prvtSerialPort.IsOpen == false) { return; }
+            prvtSerialPort.Open();
+        }
+        public void Disconnect()
+        {
+            prvtSerialPort.Close();
+        }
+
+        public Boolean IsOpen
+        {
+            get { return prvtSerialPort.IsOpen;}
+        }
+
+        private  void ProcessInput()
+        {
             try 
-            { 
-                //TODO PROCESS INPUT
+            {
+                while (prvtSerialPort.BytesToRead > 0) 
+                {
+
+                    if (prvtSerialPort.IsOpen == false) { return; }  // if serial port was closed, abandon processing routine
+
+                    byte newByte = (byte)prvtSerialPort.ReadByte();
+                    SerialDataReceived(newByte);
+
+                    switch (CurrentSerialReadState)
+                    {
+                        case SerialReadState.Idle:
+                            if (newByte < 0xF0)
+                            { 
+                                CurrentCommand = (byte)(newByte & 0xF0);
+                                multiByteChannel = (byte)(newByte & 0x0F);
+                            }
+                            else
+                            {
+                                CurrentCommand = newByte;
+                            }
+                            switch (CurrentCommand)
+                            {
+                                case (byte)FirmataMessageType.ANALOG_MESSAGE:
+                                case (byte)FirmataMessageType.DIGITAL_MESSAGE:
+                                case (byte)FirmataMessageType.REPORT_VERSION:
+                                case (byte)FirmataMessageType.SET_PIN_MODE:
+                                    bytesExpected = 2;
+                                    CurrentSerialReadState = SerialReadState.ReadingCommand;
+                                    break;
+                                case (byte)FirmataMessageType.REPORT_ANALOG:
+                                    // TODO Raise event for optional handling
+                                    break;
+                                case (byte)FirmataMessageType.REPORT_DIGITAL:
+                                    // TODO Raise event for optional handling
+                                    break;
+                                case (byte)FirmataMessageType.START_SYSEX:
+                                    CurrentSerialReadState = SerialReadState.ReadingSysEx;
+                                    SysExBytes.Clear();
+                                    break;
+                                case (byte)FirmataMessageType.END_SYSEX:
+                                    // Should never get here.  END_SYSEX will be handled under ReadingSysex case if sysex was started
+                                    break;
+                                case (byte)FirmataMessageType.SYSTEM_RESET:
+                                    // TODO Raise event for optional system reset handling
+                                    break;
+                                default:
+                                    break;
+                            }
+                            break;
+
+                        case SerialReadState.ReadingCommand:
+                            ReceivedBytes.Enqueue(newByte);
+
+                            if (ReceivedBytes.Count == bytesExpected)
+                            {
+                               switch(CurrentCommand)
+                                {
+                                    case (byte)FirmataMessageType.ANALOG_MESSAGE:
+                                       int FirstByte = ReceivedBytes.Dequeue();
+                                       int SecondByte = ReceivedBytes.Dequeue();
+                                       int Value = FirstByte + (SecondByte << 7);
+                                       AnalogPinReadReceived(multiByteChannel, Value);
+                                        break;
+                                    case (byte)FirmataMessageType.DIGITAL_MESSAGE:
+                                       int Bits0to6 = ReceivedBytes.Dequeue();
+                                       int Bit7 = ReceivedBytes.Dequeue();
+                                       int DigitalPortValue = Bits0to6 + (Bit7 << 7);
+                                        DigitalPinReadReceived(multiByteChannel,(FirmataHighLow)(DigitalPortValue));
+                                        break;
+                                    case (byte)FirmataMessageType.SET_PIN_MODE:
+                                        // TODO Raise event for optional handling
+                                        break;
+                                    case (byte)FirmataMessageType.REPORT_ANALOG:
+                                        // TODO Raise event for optional handling
+                                        break;
+                                    case (byte)FirmataMessageType.REPORT_DIGITAL:
+                                        // TODO Raise event for optional handling
+                                        break;
+                                    case (byte)FirmataMessageType.REPORT_VERSION:
+                                        majorVersion = ReceivedBytes.Dequeue();
+                                        minorVersion = ReceivedBytes.Dequeue();
+                                        VersionInfoReceived(majorVersion, minorVersion);
+                                        break;
+                                    default:
+                                        break;
+                                }
+
+                                if(ReceivedBytes.Count > 0) {ReceivedBytes.Clear();}
+                                CurrentSerialReadState = SerialReadState.Idle;
+                            }
+                            break;
+                        case SerialReadState.ReadingSysEx:
+                            if((FirmataMessageType)newByte != FirmataMessageType.END_SYSEX)
+                            {
+                                ReceivedBytes.Enqueue(newByte);
+                            }
+                            else
+                            {
+                                //TODO Parse Sysex Messages
+                                if (ReceivedBytes.Count > 0) { ReceivedBytes.Clear(); }
+                                CurrentSerialReadState = SerialReadState.Idle;
+                            }
+                            break;
+                        default: break;
+                    }     
+                }
+
             }
             catch
             {
@@ -207,9 +291,15 @@ namespace visualFirmata
             }
         }
 
-        private void SendByteArray(byte[] Array)
+        
+
+        public void SendByteArray(byte[] Array)
         {
-            try { FirmataPort.prvtSerialPort.Write(Array, 0, Array.Count()); }
+            try 
+            { 
+                this.prvtSerialPort.Write(Array, 0, Array.Count());
+                SerialDataSent(Array);
+            }
             catch (Exception Ex) { if (suppressErrors == false) { throw Ex; } }
         }
 
@@ -219,9 +309,12 @@ namespace visualFirmata
         }
     }
 
+
+
     internal class LibraryParamenters
     {
         public const int DEFAULT_BAUD_RATE = 57600;
+        public const string DEFAULT_PORT_NAME = "COM3";
     }
 
     internal class MiscFunctions
