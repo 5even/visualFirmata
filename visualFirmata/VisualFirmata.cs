@@ -3,33 +3,33 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using System.IO.Ports;
 using System.Collections.Concurrent;
+using System.Reflection;
 
 namespace visualFirmata
 {
-
     public delegate void AnalogPinReadReceivedEventHandler(int AnalogPinNumber, int Value);
     public delegate void DigitalPinReadReceivedEventHandler(int DigitalPinNumber, FirmataHighLow Value);
     public delegate void VersionInfoReceivedEventHandler(int majorVersion, int minorVersion);
-    public delegate void PinStateInfoReceivedEventHandler(int DigitalPinNumber, DigitalPinMode DigitalPinMode, FirmataOnOff DigitalPinState, FirmataHighLow DigitalPinValue);
+    public delegate void PinStateInfoReceivedEventHandler(int DigitalPinNumber, IOPinMode DigitalPinMode, FirmataOnOff DigitalPinState, FirmataHighLow DigitalPinValue);
     public delegate void SerialDataReceivedEventHandler(byte Data);
     public delegate void SerialDataSentEventHandler(byte[] Data);
 
+    public delegate void DigitalPinWriteSentHandler(int DigitalPinNumber, FirmataHighLow Value);
+    public delegate void DigitalPortReportCommandSentHandler(FirmataDigitalPort Port, FirmataOnOff onOff);
+    public delegate void AnalogPinReportCommandSentHandler(int AnalogPinNumber, FirmataOnOff onOff);
+    
     public class FirmataPort : System.ComponentModel.Component
     {
         private int[] digitalOutputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         private int[] digitalInputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         private int[] analogInputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-        private byte[] analogReadBuffer = { 0, 0 };
-
+        
         private int majorVersion = 0;
         private int minorVersion = 0;
 
-        public FirmataPort(System.ComponentModel.IContainer container)
-            : base()
+        public FirmataPort(System.ComponentModel.IContainer container) : base()
         {
             if (container != null)
             {
@@ -37,8 +37,7 @@ namespace visualFirmata
             }
             prvtSerialPort.DataReceived += prvtSerialPort_DataReceived;
         }
-        public FirmataPort()
-            : base()
+        public FirmataPort() : base()
         {
             InitializeComponent();
             this.BaudRate = 57600;
@@ -106,20 +105,51 @@ namespace visualFirmata
         public void QueryVersion() {SendByteArray(new byte[] {(byte)SysExCommand.REPORT_FIRMWARE });}
         public void StartSysEx() { SendByteArray(new byte[] { (byte)FirmataMessageType.START_SYSEX }); }
         public void EndSysEx() { SendByteArray(new byte[] { (byte)FirmataMessageType.END_SYSEX }); }
-        public void SetPinMode(int DigitalPin, DigitalPinMode DigitalPinMode) { SendByteArray(new byte[] {(byte) FirmataMessageType.SET_PIN_MODE, (byte) DigitalPin, (byte) DigitalPinMode});}
-        public void AnalogPinReport(int AnalogPin, FirmataOnOff ReportEnable) { SendByteArray(new byte[] { (byte)((byte)FirmataMessageType.REPORT_ANALOG | AnalogPin), (byte)ReportEnable }); }
-        public void DigitalPinReport(FirmataDigitalPort Pins, FirmataOnOff ReportEnable) {SendByteArray(new byte[] { (byte)(((byte)FirmataMessageType.REPORT_DIGITAL) | (byte)(Pins)), (byte)ReportEnable });}
-        public void DigitalPinReport(int Pin, FirmataOnOff ReportEnable) 
+        public void SetPinMode(int DigitalPin, IOPinMode DigitalPinMode) { SendByteArray(new byte[] {(byte) FirmataMessageType.SET_PIN_MODE, (byte) DigitalPin, (byte) DigitalPinMode});}
+        
+        public void AnalogPinReport(int AnalogPinNumber, FirmataOnOff onOff)
         {
-            FirmataDigitalPort PinsPort = (FirmataDigitalPort)(Math.Floor((double)(Pin / 8)));
-            SendByteArray(new byte[] { (byte)(((byte)FirmataMessageType.REPORT_DIGITAL) | (byte)(PinsPort)), (byte)ReportEnable }); 
+            byte Byte0 = (byte)(((byte)FirmataMessageType.REPORT_ANALOG) | (byte)AnalogPinNumber);
+            byte Byte1 = (byte)(onOff);
+            SendByteArray(new byte[] { Byte0, Byte1 });
+            AnalogPinReportCommandSent(AnalogPinNumber, onOff);
         }
         
+        /// <summary>
+        /// Enable or disable port reporting.
+        /// </summary>
+        /// <param name="Pins">The port number to enable or disable.</param>
+        /// <param name="onOff">Enable or disable</param>
+        public void DigitalPinReport(FirmataDigitalPort Pins, FirmataOnOff onOff) 
+        {
+            byte Byte0 = (byte)(((byte)FirmataMessageType.REPORT_DIGITAL) | (byte)(Pins));
+            byte Byte1 = (byte)(onOff);
+            SendByteArray(new byte[] { Byte0, Byte1 });
+            DigitalPortReportCommandSent(Pins, onOff);
+        }
+        
+        /// <summary>
+        /// Enable or disable port reporting.
+        /// </summary>
+        /// <param name="Pin">Turn on the port reporting for the given pin (between 0 and 127)</param>
+        /// <param name="onOff">Enable or disable</param>
+        public void DigitalPinReport(int Pin, FirmataOnOff onOff) 
+        {
+            FirmataDigitalPort PinsPort = (FirmataDigitalPort)(Math.Floor((double)(Pin / 8)));
+            DigitalPinReport(PinsPort, onOff);
+        }
+        
+        /// <summary>
+        /// Write to a digital pin
+        /// </summary>
+        /// <param name="pin">Digital Pin Number (between 0 and 127)</param>
+        /// <param name="value">Value to write to the pin</param>
         public void DigitalWrite(int pin, FirmataHighLow value)
         {
+            byte[] digitalWriteBytes = { 0, 0, 0 };
             int portNumber = (pin >> 3) & 15;
             int adjustment = (1 << (pin & 7));
-            byte[] digitalWriteBytes = { 0, 0, 0 };
+            
             
             if(value == 0)
             {
@@ -135,6 +165,7 @@ namespace visualFirmata
             digitalWriteBytes[2] = (byte)((byte)digitalOutputData[portNumber] >> 7);
 
             SendByteArray(digitalWriteBytes);
+            DigitalPinWriteSent(pin, value);
         }
         
         private void prvtSerialPort_DataReceived(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
@@ -152,12 +183,17 @@ namespace visualFirmata
         internal  List<byte> InputBytes = new List<byte>();
         internal  List<byte> SysExBytes = new List<byte>();
 
+
         public event DigitalPinReadReceivedEventHandler DigitalPinReadReceived;
         public event AnalogPinReadReceivedEventHandler AnalogPinReadReceived;
         public event VersionInfoReceivedEventHandler VersionInfoReceived;
-        public event PinStateInfoReceivedEventHandler PinStateInfoReceived;
+        public event PinStateInfoReceivedEventHandler PinStateInfoReceived;  // TODO Parse Pin state sysex command to raise this
         public event SerialDataReceivedEventHandler SerialDataReceived;
         public event SerialDataSentEventHandler SerialDataSent;
+
+        public event DigitalPinWriteSentHandler DigitalPinWriteSent;
+        public event DigitalPortReportCommandSentHandler DigitalPortReportCommandSent;
+        public event AnalogPinReportCommandSentHandler AnalogPinReportCommandSent;
 
         public void Connect()
         {
@@ -173,13 +209,16 @@ namespace visualFirmata
             get { return prvtSerialPort.IsOpen;}
         }
 
+        private bool IsMIDICommand(byte Byte) {return (Byte < 0xF0);}
+        private byte ExtractMIDICommand(byte Byte) { return (byte)(Byte & 0xF0); }
+        private byte ExtractMIDIChannel(byte Byte) { return (byte)(Byte & 0x0F); }
+        
         private  void ProcessInput()
         {
             try 
             {
                 while (prvtSerialPort.BytesToRead > 0) 
                 {
-
                     if (prvtSerialPort.IsOpen == false) { return; }  // if serial port was closed, abandon processing routine
 
                     byte newByte = (byte)prvtSerialPort.ReadByte();
@@ -188,10 +227,10 @@ namespace visualFirmata
                     switch (CurrentSerialReadState)
                     {
                         case SerialReadState.Idle:
-                            if (newByte < 0xF0)
+                            if (IsMIDICommand(newByte))
                             { 
-                                CurrentCommand = (byte)(newByte & 0xF0);
-                                multiByteChannel = (byte)(newByte & 0x0F);
+                                CurrentCommand = ExtractMIDICommand(newByte);
+                                multiByteChannel = ExtractMIDIChannel(newByte);
                             }
                             else
                             {
@@ -290,9 +329,7 @@ namespace visualFirmata
 
             }
         }
-
-        
-
+              
         public void SendByteArray(byte[] Array)
         {
             try 

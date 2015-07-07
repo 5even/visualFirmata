@@ -86,7 +86,7 @@ namespace TestForm
         }
         private void sendBlinks(int msCount = 1000)
         {
-            prvtFirmataPort.SetPinMode(13, DigitalPinMode.OUTPUT);
+            prvtFirmataPort.SetPinMode(13, IOPinMode.OUTPUT);
             System.Threading.Thread.Sleep(10);
             prvtFirmataPort.DigitalWrite(13, FirmataHighLow.HIGH);
             System.Threading.Thread.Sleep(msCount);
@@ -340,8 +340,6 @@ namespace TestForm
 
                 if (Bytes == null)
                 {
-
-
                     if (SendDataInputFormat == PrintDataFormat.ASCII)
                     {
                         prvtFirmataPort.SendByteArray(Encoding.ASCII.GetBytes(sendTextBox.Text));
