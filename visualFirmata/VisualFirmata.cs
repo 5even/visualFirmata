@@ -22,9 +22,9 @@ namespace visualFirmata
     
     public class FirmataPort : System.ComponentModel.Component
     {
-        private int[] digitalOutputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        private int[] digitalInputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        private int[] analogInputData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        private int[] digitalWriteData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        private int[] digitalReadData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        private int[] analogReadData = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         
         private int majorVersion = 0;
         private int minorVersion = 0;
@@ -153,16 +153,16 @@ namespace visualFirmata
             
             if(value == 0)
             {
-                digitalOutputData[portNumber] = digitalOutputData[portNumber] & (~adjustment);
+                digitalWriteData[portNumber] = digitalWriteData[portNumber] & (~adjustment);
             }
             else
             {
-                digitalOutputData[portNumber] = digitalOutputData[portNumber] | adjustment;
+                digitalWriteData[portNumber] = digitalWriteData[portNumber] | adjustment;
             }
 
             digitalWriteBytes[0] = (byte)((byte)FirmataMessageType.DIGITAL_MESSAGE | (byte)portNumber);
-            digitalWriteBytes[1] = (byte)((byte)digitalOutputData[portNumber] & (byte)127);
-            digitalWriteBytes[2] = (byte)((byte)digitalOutputData[portNumber] >> 7);
+            digitalWriteBytes[1] = (byte)((byte)digitalWriteData[portNumber] & (byte)127);
+            digitalWriteBytes[2] = (byte)((byte)digitalWriteData[portNumber] >> 7);
 
             SendByteArray(digitalWriteBytes);
             DigitalPinWriteSent(pin, value);
